@@ -1,10 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
+import shutil
 from flask import Flask, jsonify, render_template, request, send_from_directory
 import uuid
 import os
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
+from PIL import Image, ImageOps, UnidentifiedImageError
 import generate_process
 from paths import REELS_FOLDER, UPLOAD_FOLDER
 
@@ -14,6 +16,8 @@ REELS_FOLDER.mkdir(parents=True, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 reel_executor = ThreadPoolExecutor(max_workers=1)
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_IMAGE_SIZE = (1080, 1920)
 
 
 def write_job_status(upload_dir, status, message=None):
@@ -72,8 +76,27 @@ def create():
                 filename1 = secure_filename(file.filename)
                 if not filename1:
                     continue
-                filename1 = filename1.replace(" ", "_")
-                file.save(upload_dir / filename1)
+                try:
+                    with Image.open(file.stream) as source_image:
+                        if source_image.width * source_image.height > MAX_IMAGE_PIXELS:
+                            shutil.rmtree(upload_dir, ignore_errors=True)
+                            return jsonify({"status": "error", "message": "Each photo must be 40 megapixels or smaller."}), 400
+
+                        image = ImageOps.exif_transpose(source_image)
+                        image.thumbnail(MAX_IMAGE_SIZE, Image.Resampling.LANCZOS)
+                        if "A" in image.getbands():
+                            rgba_image = image.convert("RGBA")
+                            image = Image.new("RGB", rgba_image.size, "white")
+                            image.paste(rgba_image, mask=rgba_image.getchannel("A"))
+                        else:
+                            image = image.convert("RGB")
+
+                        filename1 = f"image_{len(input_files) + 1:03d}.jpg"
+                        image.save(upload_dir / filename1, format="JPEG", quality=85, optimize=True)
+                except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+                    shutil.rmtree(upload_dir, ignore_errors=True)
+                    return jsonify({"status": "error", "message": "One of the uploaded files is not a supported image."}), 400
+
                 input_files.append(filename1)
         
         # Return an error if no files were uploaded.
