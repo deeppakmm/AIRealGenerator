@@ -13,6 +13,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 def text_to_speech_file(text: str, folder:str) -> str:
     api_key = os.environ.get("ELEVENLABS_API_KEY")
+    
     if not api_key:
         raise RuntimeError("Set ELEVENLABS_API_KEY in the environment before creating a reel.")
 
