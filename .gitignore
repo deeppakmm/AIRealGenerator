@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/
+done.txt
+user_uploads/*
+!user_uploads/.gitkeep
+static/reels/*
+!static/reels/.gitkeep

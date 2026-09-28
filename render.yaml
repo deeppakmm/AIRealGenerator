@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ai-reel-generator
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: ELEVENLABS_API_KEY
+        sync: false
+    disk:
+      name: reel-data
+      mountPath: /var/data
+      sizeGB: 10

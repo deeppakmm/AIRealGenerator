@@ -1,14 +1,15 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, jsonify, render_template, request, send_from_directory
 import uuid
-from werkzeug.utils import secure_filename
 import os
+from werkzeug.utils import secure_filename
 import generate_process
-
-UPLOAD_FOLDER = 'user_uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+from paths import REELS_FOLDER, UPLOAD_FOLDER
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+REELS_FOLDER.mkdir(parents=True, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 
 @app.route("/")
 def home():
@@ -18,66 +19,70 @@ def home():
 def create():
     # Handle data sent from the page with a POST request.
     if request.method == 'POST':
-        rec_id = request.form.get("uuid")
         desc = request.form.get("text")
         
         # Check that the description and files were sent.
         if not desc or desc.strip() == "" or not request.files:
             return jsonify({"status": "error", "message": "Missing description or files"}), 400
             
+        rec_id = str(uuid.uuid4())
+        upload_dir = UPLOAD_FOLDER / rec_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
         input_files = []
-        has_valid_file = False
         
         # Save each uploaded file.
         for key in request.files:
             file = request.files[key]
             
             if file and file.filename != '':
-                has_valid_file = True
                 filename1 = secure_filename(file.filename)
+                if not filename1:
+                    continue
                 filename1 = filename1.replace(" ", "_")
-                
-                # Create a folder for this upload and save the file.
-                os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], rec_id), exist_ok=True)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], rec_id, filename1))
+                file.save(upload_dir / filename1)
                 input_files.append(filename1)
         
         # Return an error if no files were uploaded.
-        if not has_valid_file:
+        if not input_files:
             return jsonify({"status": "error", "message": "No valid files uploaded"}), 400
             
         # Save the description and file list.
-        with open(os.path.join(app.config['UPLOAD_FOLDER'], rec_id, 'desc.txt'), 'w') as f:
+        with open(upload_dir / "desc.txt", "w", encoding="utf-8") as f:
             f.write(desc)
             
-        
-        for fl in input_files:
-            with open(os.path.join(app.config['UPLOAD_FOLDER'], rec_id, 'input.txt'), 'a') as f1:
+        with open(upload_dir / "input.txt", "w", encoding="utf-8") as f1:
+            for fl in input_files:
                 f1.write(f"file '{fl}'\nduration 1\n") 
                 
-    
-        generate_process.start1()
-        
+        try:
+            generate_process.start1(rec_id)
+        except Exception:
+            app.logger.exception("Reel creation failed.")
+            return jsonify({"status": "error", "message": "Reel creation failed. Check the server configuration and logs."}), 500
 
         return jsonify({"status": "success", "message": "Your Reel is created!"})
 
     # Show the page when the user opens it.
-    myId = uuid.uuid1()
-    return render_template("create.html", myId=myId)
+    return render_template("create.html")
 
 @app.route("/gallery")
 def gallery():
-    reels_directory = os.path.join(app.static_folder, "reels")
     reels = []
 
-    if os.path.isdir(reels_directory):
+    if REELS_FOLDER.is_dir():
         reels = sorted(
-            (filename for filename in os.listdir(reels_directory) if filename.lower().endswith(".mp4")),
-            key=lambda filename: os.path.getmtime(os.path.join(reels_directory, filename)),
+            (filename for filename in REELS_FOLDER.iterdir() if filename.suffix.lower() == ".mp4"),
+            key=lambda filename: filename.stat().st_mtime,
             reverse=True,
         )
+        reels = [filename.name for filename in reels]
 
     return render_template("gallery.html", reels=reels)
 
+
+@app.route("/reels/<path:filename>")
+def reel_file(filename):
+    return send_from_directory(REELS_FOLDER, filename, mimetype="video/mp4", conditional=True)
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")

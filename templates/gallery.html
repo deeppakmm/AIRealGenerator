@@ -15,7 +15,7 @@
             <div class="reel-card">
                 <div class="reel-thumbnail">
                     <video controls preload="metadata" playsinline>
-                        <source src="{{ url_for('static', filename='reels/' ~ reel) }}" type="video/mp4">
+                        <source src="{{ url_for('reel_file', filename=reel) }}" type="video/mp4">
                         Your browser does not support video playback.
                     </video>
                 </div>
