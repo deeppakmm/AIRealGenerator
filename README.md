@@ -1,5 +1,9 @@
 # AI Reel Generator
 
+## 🚀 Live Demo
+
+👉 [AI Reel Generator](https://airealgenerator.onrender.com)
+
 A Flask app that turns uploaded images and text into a narrated vertical reel. It uses ElevenLabs for speech generation and FFmpeg to build the MP4.
 
 Generated reels appear in the gallery, where they can be played or downloaded.
