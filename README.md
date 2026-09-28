@@ -2,6 +2,8 @@
 
 A Flask app that turns uploaded images and text into a narrated vertical reel. It uses ElevenLabs for speech generation and FFmpeg to build the MP4.
 
+Generated reels appear in the gallery, where they can be played or downloaded.
+
 ## Requirements
 
 - Python 3.12 or newer

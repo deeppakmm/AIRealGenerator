@@ -84,5 +84,18 @@ def gallery():
 def reel_file(filename):
     return send_from_directory(REELS_FOLDER, filename, mimetype="video/mp4", conditional=True)
 
+
+@app.route("/reels/<filename>/download")
+def download_reel(filename):
+    return send_from_directory(
+        REELS_FOLDER,
+        filename,
+        mimetype="video/mp4",
+        as_attachment=True,
+        download_name=filename,
+        conditional=True,
+    )
+
+
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")

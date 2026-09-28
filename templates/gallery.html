@@ -21,7 +21,10 @@
                 </div>
                 <div class="reel-info">
                     <h3>Reel {{ loop.index }}</h3>
-                    <p>Ready to watch</p>
+                    <a class="reel-download" href="{{ url_for('download_reel', filename=reel) }}" aria-label="Download Reel {{ loop.index }}">
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        <span>Download</span>
+                    </a>
                 </div>
             </div>
         </div>
