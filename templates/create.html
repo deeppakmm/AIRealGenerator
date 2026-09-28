@@ -109,38 +109,27 @@
         const formData = new FormData(this);
 
         // Send the form data to the server.
-        fetch('/create', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json()) 
-        .then(data => {
-            if (data.status === "success") {
-                // Show a success message when the server finishes creating the reel.
-                submitBtn.style.backgroundColor = "#28a745"; // Green
-                submitBtn.style.color = "#fff";
-                submitBtn.innerHTML = "Your Reel is created! 🎉";
+        const readJsonResponse = async response => {
+            const responseText = await response.text();
+            let data;
 
-                // Show a success message with a link to the gallery.
-                errorBox.style.backgroundColor = "#d4edda";
-                errorBox.style.color = "#155724";
-                errorBox.style.borderColor = "#c3e6cb";
-                errorBox.innerHTML = `
-                    <h3>✨ Boom! Your Reel is Ready!</h3>
-                    <p>Your awesome Reel has been successfully created. Head over to your Gallery section to check it out! 🍿</p>
-                    <a href="/gallery" style="display: inline-block; margin-top: 10px; background: #007bff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; font-weight: normal;">Go to Gallery ➡️</a>
-                `;
-                errorBox.style.display = "block";
-                window.scrollTo(0, 0);
-                window.setTimeout(() => window.location.assign("/gallery"), 1200);
-            } else {
-                throw new Error(data.message || "Something went wrong");
+            try {
+                data = JSON.parse(responseText);
+            } catch {
+                const responseType = responseText.trim() ? "non-JSON" : "empty";
+                throw new Error(`Server returned an ${responseType} response (HTTP ${response.status}). Check Render logs.`);
             }
-        })
-        .catch(error => {
-            // Reset the button and show the error message.
+
+            if (!response.ok) {
+                throw new Error(data.message || `Request failed (HTTP ${response.status}).`);
+            }
+
+            return data;
+        };
+
+        const showError = error => {
             submitBtn.disabled = false;
-            submitBtn.style.backgroundColor = ""; 
+            submitBtn.style.backgroundColor = "";
             submitBtn.style.color = "";
             submitBtn.innerHTML = "Create Reel";
             errorBox.style.backgroundColor = "#f8d7da";
@@ -148,7 +137,49 @@
             errorBox.style.borderColor = "#f5c6cb";
             errorBox.innerText = "❌ Error: " + error.message;
             errorBox.style.display = "block";
-        });
+        };
+
+        const pollJob = async (jobId, remainingChecks) => {
+            if (remainingChecks <= 0) {
+                throw new Error("Reel is taking longer than expected. Check Render logs before trying again.");
+            }
+
+            const response = await fetch(`/create/status/${encodeURIComponent(jobId)}`);
+            const job = await readJsonResponse(response);
+
+            if (job.status === "success") {
+                submitBtn.style.backgroundColor = "#28a745";
+                submitBtn.style.color = "#fff";
+                submitBtn.innerHTML = "Your Reel is created! 🎉";
+                window.location.assign("/gallery");
+                return;
+            }
+
+            if (job.status === "error") {
+                throw new Error(job.message || "Reel creation failed. Check Render logs.");
+            }
+
+            if (job.status !== "processing") {
+                throw new Error("The server returned an unknown reel status.");
+            }
+
+            window.setTimeout(() => {
+                pollJob(jobId, remainingChecks - 1).catch(showError);
+            }, 2000);
+        };
+
+        fetch('/create', {
+            method: 'POST',
+            body: formData
+        })
+        .then(readJsonResponse)
+        .then(data => {
+            if (data.status !== "processing" || !data.job_id) {
+                throw new Error(data.message || "The server did not return a reel job.");
+            }
+            pollJob(data.job_id, 600).catch(showError);
+        })
+        .catch(showError);
     });
 </script>
 {% endblock %}
